@@ -1,0 +1,35 @@
+Surprise 1.2 — bundled player notices
+
+The executor embeds mpv v0.41.0-1095-g413ff0b1c (Windows build 20261004),
+including FFmpeg N-127165-g12c589a37 and its enabled dependencies.
+The player is extracted temporarily at runtime. No mpv installation is required.
+
+This mpv build is distributed under the GNU General Public License, version 2
+or later. Some enabled components require GPL version 3; the combined player
+must satisfy GPLv3. Copyright remains with the respective upstream authors.
+See third-party/GPL-2.0.txt and third-party/GPL-3.0.txt for the license terms.
+There is no warranty, to the extent permitted by law.
+
+Binary provider, archive and checksum:
+https://github.com/shinchiro/mpv-winbuild-cmake/releases/tag/20261004
+x64: mpv-x86_64-20261004-git-413ff0b1cd.7z
+SHA256: 0703a0d62c60b2c68511c6a101db82a31c32c69bcdd86941632a1e76bb1699b7
+arm64: mpv-aarch64-20261004-git-413ff0b1cd.7z
+SHA256: 68fc5157d6c947b10e3a6dbd2c729937f508c9914c64ba34d9457b70d3cc57f5
+
+Upstream source and build instructions:
+mpv: https://github.com/mpv-player/mpv/tree/413ff0b1cd
+FFmpeg: https://github.com/FFmpeg/FFmpeg/tree/12c589a37
+Windows build recipes (including dependency recipes):
+https://github.com/shinchiro/mpv-winbuild-cmake/tree/20261004
+mpv build guide: https://github.com/mpv-player/mpv/blob/master/DOCS/compile-windows.md
+FFmpeg license information: https://ffmpeg.org/legal.html
+
+Source links and build recipes are provenance information, not a written
+source offer or a complete corresponding-source bundle. If redistributing
+the combined binary, provide the complete corresponding source for this
+exact build (including enabled dependencies and build configuration) under
+the applicable GPL terms. Do not assume links alone fulfil that obligation.
+
+Surprise uses JSON IPC to control the separately running mpv executable.
+mpv's own user configuration, scripts, and installer are not used.

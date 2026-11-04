@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <WindowsSdkPackageVersion>10.0.19041.31</WindowsSdkPackageVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Surprise.Executor</AssemblyName>
+    <ApplicationManifest>../app.manifest</ApplicationManifest>
+    <MpvArchitecture Condition="'$(RuntimeIdentifier)' == 'win-arm64'">arm64</MpvArchitecture>
+    <MpvArchitecture Condition="'$(MpvArchitecture)' == ''">x64</MpvArchitecture>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Surprise.Windows/Surprise.Windows.csproj" /></ItemGroup>
+  <ItemGroup Condition="Exists('../../artifacts/vendor/mpv/$(MpvArchitecture)/mpv.exe')">
+    <EmbeddedResource Include="../../artifacts/vendor/mpv/$(MpvArchitecture)/mpv.exe" LogicalName="Surprise.mpv.exe" />
+    <EmbeddedResource Include="../../artifacts/vendor/mpv/$(MpvArchitecture)/mpv.sha256" LogicalName="Surprise.mpv.sha256" />
+  </ItemGroup>
+  <Target Name="RequireBundledMpv" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('../../artifacts/vendor/mpv/$(MpvArchitecture)/mpv.exe')" Text="Fetch the pinned mpv build first: powershell -ExecutionPolicy Bypass -File build/fetch-mpv.ps1" />
+  </Target>
+</Project>

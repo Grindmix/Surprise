@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <WindowsSdkPackageVersion>10.0.19041.31</WindowsSdkPackageVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Surprise.Setup</AssemblyName>
+    <ApplicationManifest>../app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Surprise.Windows/Surprise.Windows.csproj" /></ItemGroup>
+  <PropertyGroup>
+    <ExecutorBundlePath>$(MSBuildThisFileDirectory)..\..\artifacts\publish\$(RuntimeIdentifier)\Executor\Surprise.Executor.exe</ExecutorBundlePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../../THIRD-PARTY.txt" LogicalName="Surprise.THIRD-PARTY.txt" />
+    <EmbeddedResource Include="../../third-party/GPL-2.0.txt" LogicalName="Surprise.GPL-2.0.txt" />
+    <EmbeddedResource Include="../../third-party/GPL-3.0.txt" LogicalName="Surprise.GPL-3.0.txt" />
+    <EmbeddedResource Include="$(ExecutorBundlePath)" LogicalName="Surprise.bundled.executor.exe" Condition="'$(RuntimeIdentifier)' != '' and Exists('$(ExecutorBundlePath)')" />
+  </ItemGroup>
+  <Target Name="RequireBundledExecutor" BeforeTargets="PrepareForBuild" Condition="'$(RuntimeIdentifier)' != '' and '$(PublishSingleFile)' == 'true'">
+    <Error Condition="!Exists('$(ExecutorBundlePath)')" Text="Publish Surprise.Executor before Surprise.Setup so the executor can be embedded. Expected $(ExecutorBundlePath)." />
+  </Target>
+</Project>
