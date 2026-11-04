@@ -1,4 +1,4 @@
-# Surprise 2
+# Surprise 2.1
 
 One Windows application: **Surprise.exe** configures and plays a surprise when a controller connects. No separate Setup or generated executor is needed. The player and .NET runtime are bundled; media is referenced by path.
 
@@ -7,7 +7,7 @@ One Windows application: **Surprise.exe** configures and plays a surprise when a
 1. Choose **Видео**, **Изображение**, or **Пиксельарт · PNG-кадры**.
 2. Select your own media. For pixel art add one or more PNGs, then use the up/down buttons to order them.
 3. Choose playback settings. Pixel animation defaults to **1 FPS**. Set **Сколько секунд крутить цикл** and, optionally, an appearance effect.
-4. Choose the screen and object size. **Расположить на рабочем столе…** shows the first frame; drag it and resize its corner. **Превью сюрприза** runs the actual playback without saving.
+4. Choose the screen and object size. **Расположить на рабочем столе…** shows the first frame; drag it and resize its corner. Hold **Shift** while resizing to keep its aspect ratio. **Отцентрировать** centers the object on the selected display. **Превью сюрприза** runs the actual playback without saving.
 5. Choose any controller or a connected controller model and the cooldown.
 6. Review, preview, and choose **Сохранить и запустить**.
 
@@ -20,6 +20,16 @@ Normal launch opens the control window and starts waiting for a controller. Its 
 Closing the window leaves Surprise running **without a tray icon**. A first-close notice explains this. Launch the same executable again to restore the running window; it does not start a second listener. **Завершить Surprise** exits completely. Task Manager can also terminate it.
 
 Editing and previewing settings pause controller triggers. Settings apply only after **Сохранить**. **Отмена** discards the draft. There is no one-shot mode. Startup records current controller connections as a baseline; arrivals while paused, editing, playing, cooling down, or locked are dropped.
+
+Media and appearance effects use square rounded cards with icons. The selected option's description appears below the row. Saved settings use category navigation with a fixed Save/Cancel footer; the first-run wizard keeps Back/Next navigation.
+
+## Diagnostic log
+
+`Surprise.log` is written in UTF-8 beside the running `Surprise.exe`, independent of the current working directory or media location. The control window's **Диагностика** card shows the application directory and buttons to open that folder or the log. The executable directory must be writable; a logging failure is shown in this card and does not crash playback.
+
+The log includes version, executable/settings paths, OS/runtime/architecture, graphics rendering tier and displays, settings load/save, controller identities and connection/trigger decisions, session state, pause/editing, media file metadata and PNG decoding/cache/timing, reveal completion, frame changes, playback stop/completion, autostart changes, mpv process/IPC/backend output, and exception stacks. It contains local file paths and controller names; nothing is uploaded automatically.
+
+At 4 MiB the file rotates to `Surprise.log.1`, with up to three previous files (`.1`–`.3`). For debugging on another PC, send the current log and rotated files if present, together with the time and description of the failure.
 
 ## Media and transparency
 
@@ -60,3 +70,5 @@ dotnet run --project tests/Surprise.AnimationTests -c Release -p:BuildInParallel
 ```
 
 The animation suite uses both original `local/1.png` and `local/2.png`, checks logical grids, alpha, timing and corruption handling, and renders effect stages under `artifacts/animation-qa`. Developer-only `--settings <path>` isolates test settings; `--check-backend <report.json>` verifies embedded player extraction without opening the UI.
+
+`--render-ui <output-directory>` renders wizard/settings/control layouts offscreen at two window widths for visual QA, without showing a window or using Computer Use. It also checks square choice-card geometry and records clipped text in `layout-report.json`.

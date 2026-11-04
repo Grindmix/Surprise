@@ -3,12 +3,14 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
+using System.Linq;
 using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Surprise.Core;
+using Surprise.Windows;
 
 namespace Surprise.Executor;
 
@@ -30,6 +32,7 @@ internal sealed class MpvSession : IDisposable
 
     public async Task StartAsync(SurpriseConfig config)
     {
+        DiagnosticLog.Info("mpv.start-request", new { config.MediaPath, config.PlaybackMode, config.Volume, config.Monitor });
         string executable = await Task.Run(MpvBundle.Prepare, lifetime.Token);
         lifetime.Token.ThrowIfCancellationRequested();
         logFile = MpvBundle.NewLog();
@@ -52,6 +55,7 @@ internal sealed class MpvSession : IDisposable
         if (SurpriseConfig.IsImage(config.MediaPath) || config.PlaybackMode == PlaybackMode.Overlay) start.ArgumentList.Add("--loop-file=inf");
         process = Process.Start(start) ?? throw new IOException("Could not start bundled mpv.");
         ProcessId = process.Id;
+        DiagnosticLog.Info("mpv.started", new { ProcessId, Executable = executable, LogFile = logFile, Arguments = start.ArgumentList.ToArray() });
         try { job = new ChildProcessJob(process); }
         catch { if (!process.HasExited) process.Kill(); throw; }
         _ = MonitorExitAsync();
@@ -70,6 +74,7 @@ internal sealed class MpvSession : IDisposable
         try
         {
             string json = JsonSerializer.Serialize(new { command, request_id = id });
+            DiagnosticLog.Info("mpv.command", new { Id = id, Command = command });
             await writes.WaitAsync(lifetime.Token);
             try { await writer!.WriteLineAsync(json.AsMemory(), lifetime.Token); }
             finally { writes.Release(); }
@@ -91,18 +96,18 @@ internal sealed class MpvSession : IDisposable
                 if (root.TryGetProperty("request_id", out var id) && requests.TryGetValue(id.GetInt32(), out var response))
                 {
                     string? error = root.GetProperty("error").GetString();
-                    if (error != "success") response.TrySetException(new IOException("mpv: " + error));
+                    if (error != "success") { DiagnosticLog.Warn("mpv.command-error", new { Id = id.GetInt32(), Error = error }); response.TrySetException(new IOException("mpv: " + error)); }
                     else response.TrySetResult(root.TryGetProperty("data", out var data) ? data.Clone() : default);
                 }
-                else if (root.TryGetProperty("event", out var type)) Event?.Invoke(type.GetString()!, root.Clone());
+                else if (root.TryGetProperty("event", out var type)) { DiagnosticLog.Info("mpv.event", root); Event?.Invoke(type.GetString()!, root.Clone()); }
             }
         }
         catch (Exception ex) when (lifetime.IsCancellationRequested && ex is OperationCanceledException or IOException or ObjectDisposedException) { }
-        catch (Exception ex) { Failed?.Invoke(ex.Message); }
+        catch (Exception ex) { DiagnosticLog.Error("mpv.ipc-failed", ex); Failed?.Invoke(ex.Message); }
     }
     private async Task MonitorExitAsync()
     {
-        try { await process!.WaitForExitAsync(lifetime.Token); if (!disposed) Failed?.Invoke("mpv exited unexpectedly. " + ReadLogTail()); }
+        try { await process!.WaitForExitAsync(lifetime.Token); DiagnosticLog.Info("mpv.exited", new { ProcessId, ExitCode = process.ExitCode, Expected = disposed }); if (!disposed) Failed?.Invoke("mpv exited unexpectedly. " + ReadLogTail()); }
         catch (OperationCanceledException) { }
         catch (Exception) when (disposed) { }
     }
@@ -114,10 +119,15 @@ internal sealed class MpvSession : IDisposable
     public void Dispose()
     {
         if (disposed) return; disposed = true; lifetime.Cancel();
+        DiagnosticLog.Info("mpv.stopping", new { ProcessId });
         pipe?.Dispose(); job?.Dispose();
         if (process is not null) { try { if (!process.HasExited) process.Kill(); process.WaitForExit(3000); } catch (InvalidOperationException) { } process.Dispose(); }
         foreach (var request in requests.Values) request.TrySetCanceled();
-        if (logFile is not null) MpvBundle.ReleaseLog(logFile);
+        if (logFile is not null)
+        {
+            if (DiagnosticLog.Enabled) try { string contents = File.ReadAllText(logFile); DiagnosticLog.Info("mpv.backend-log", new { Text = contents.Length > 65536 ? contents[^65536..] : contents }); } catch (Exception ex) { DiagnosticLog.Error("mpv.log-read-failed", ex); }
+            MpvBundle.ReleaseLog(logFile);
+        }
         // In-flight readers own their references to these synchronization objects.
     }
 }

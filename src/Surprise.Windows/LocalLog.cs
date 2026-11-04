@@ -9,6 +9,7 @@ public sealed class LocalLog(string root)
     private readonly object gate = new();
     public void Write(string message)
     {
+        if (DiagnosticLog.Enabled) { DiagnosticLog.Info("playback.backend", new { Message = message }); return; }
         lock (gate)
         {
             try

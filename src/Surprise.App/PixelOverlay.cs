@@ -13,6 +13,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Surprise.Core;
+using Surprise.Windows;
 using Forms = System.Windows.Forms;
 
 namespace Surprise.App;
@@ -26,9 +27,13 @@ internal static class FrameLoader
         foreach (string value in config.Files)
         {
             token.ThrowIfCancellationRequested(); string path = config.Resolve(value, settingsPath); var info = new FileInfo(path);
+            var watch = Stopwatch.StartNew();
+            DiagnosticLog.Info("png.load", new { Path = path, info.Length, info.LastWriteTimeUtc });
             string key = path + "|" + info.Length + "|" + info.LastWriteTimeUtc.Ticks;
             PixelFrame? frame; lock (cache) cache.TryGetValue(key, out frame);
+            bool cached = frame is not null;
             frame ??= PixelPng.Read(path, cancellation: token);
+            DiagnosticLog.Info("png.loaded", new { Path = path, Cached = cached, frame.SourceWidth, frame.SourceHeight, frame.Width, frame.Height, frame.CellSize, Pixels = frame.Colors.Length, Milliseconds = watch.Elapsed.TotalMilliseconds });
             pixels += frame.Colors.Length;
             if (pixels > 32_000_000) throw new InvalidDataException("Слишком много данных во всех кадрах. Уменьши исходные PNG при экспорте или сократи число кадров.");
             if (frames.Count > 0 && (frame.SourceWidth != frames[0].SourceWidth || frame.SourceHeight != frames[0].SourceHeight)) throw new InvalidDataException("У всех PNG-кадров должны совпадать размеры холста.");
@@ -139,6 +144,8 @@ internal sealed class PixelOverlay : Window
     private readonly Stopwatch clock = new();
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private int lastFrame = -1;
+    private bool revealed, completed;
+    private double lastTick, lastSlowLog;
     public event Action? Ready;
     public PixelOverlay(AnimationSettings settings, List<PixelFrame> frames)
     {
@@ -153,16 +160,20 @@ internal sealed class PixelOverlay : Window
             SetWindowPos(handle, new IntPtr(-1), bounds.Left, bounds.Top, bounds.Width, bounds.Height, 0x10);
             var dpi = VisualTreeHelper.GetDpi(this); var target = Placement(settings, bounds.Width, bounds.Height);
             surface.Target = new Rect(target.X / dpi.DpiScaleX, target.Y / dpi.DpiScaleY, target.Width / dpi.DpiScaleX, target.Height / dpi.DpiScaleY);
+            DiagnosticLog.Info("pixel.window-ready", new { screen.DeviceName, Bounds = bounds, Target = surface.Target, DpiX = dpi.DpiScaleX, DpiY = dpi.DpiScaleY, settings.Effect, RevealSeconds = surface.RevealDuration, settings.FramesPerSecond, settings.DurationSeconds, Frames = frames.Count });
             clock.Start(); timer.Start(); surface.InvalidateVisual(); Ready?.Invoke();
         };
         timer.Tick += (_, _) =>
         {
             double t = clock.Elapsed.TotalSeconds;
-            if (t >= surface.RevealDuration + settings.DurationSeconds) { Close(); return; }
+            if (t - lastTick > .1 && t - lastSlowLog > 1) { lastSlowLog = t; DiagnosticLog.Warn("pixel.slow-tick", new { ElapsedSeconds = t, GapMilliseconds = (t - lastTick) * 1000 }); } lastTick = t;
+            if (!revealed && t >= surface.RevealDuration) { revealed = true; DiagnosticLog.Info("pixel.reveal-completed", new { ElapsedSeconds = t }); }
+            if (t >= surface.RevealDuration + settings.DurationSeconds) { completed = true; Close(); return; }
             int frame = AnimationClock.FrameAt(t - surface.RevealDuration, settings.FramesPerSecond, frames.Count);
+            if (t >= surface.RevealDuration && frame != lastFrame) DiagnosticLog.Info("pixel.frame", new { Index = frame, CycleElapsedSeconds = t - surface.RevealDuration });
             if (t <= surface.RevealDuration + .05 || frame != lastFrame) { surface.Elapsed = t; surface.InvalidateVisual(); lastFrame = frame; }
         };
-        Closed += (_, _) => timer.Stop(); KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
+        Closed += (_, _) => { timer.Stop(); DiagnosticLog.Info("pixel.window-closed", new { Completed = completed, ElapsedSeconds = clock.Elapsed.TotalSeconds }); }; KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
     }
     public static Forms.Screen Display(string name) => Forms.Screen.AllScreens.FirstOrDefault(s => s.DeviceName == name) ?? Forms.Screen.PrimaryScreen ?? Forms.Screen.AllScreens[0];
     public static OverlayRectangle Placement(AnimationSettings s, int width, int height) => OverlayPlacement.Resolve(new SurpriseConfig { OverlayWidth = s.Width, OverlayHeight = s.Height, OverlayX = s.X, OverlayY = s.Y, OverlayAnchor = OverlayAnchor.Custom }, width, height);

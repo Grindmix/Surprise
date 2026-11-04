@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Surprise.Core;
 using Surprise.App;
+using Surprise.Windows;
 
 internal static class Program
 {
@@ -19,6 +20,26 @@ internal static class Program
         try
         {
             string root = Path.GetFullPath(args.Length > 0 ? args[0] : "."); string output = Path.Combine(root, "artifacts", "animation-qa"); Directory.CreateDirectory(output);
+            var lockedSize = PlacementGeometry.Resize(600, 480, 200, 0, 1200, 900, true, 1.25);
+            Check(lockedSize.Width == 800 && lockedSize.Height == 640, "Shift resize preserves aspect ratio for horizontal drag");
+            var verticalSize = PlacementGeometry.Resize(600, 480, 0, 100, 1200, 900, true, 1.25);
+            Check(verticalSize.Width == 725 && verticalSize.Height == 580, "Shift resize follows vertical drag without distortion");
+            var boundedSize = PlacementGeometry.Resize(600, 480, 500, 500, 700, 500, true, 1.25);
+            Check(boundedSize.Width == 625 && boundedSize.Height == 500, "Shift resize respects screen bounds and aspect ratio");
+            var freeSize = PlacementGeometry.Resize(600, 480, 200, 0, 1200, 900, false, 1.25);
+            Check(freeSize.Width == 800 && freeSize.Height == 480, "resize without Shift remains independent on both axes");
+            var center = PlacementGeometry.Center(1920, 1080, 600, 480);
+            Check(center == (660d, 300d), "center positions the object in the selected display");
+            string logDirectory = Path.Combine(output, "logging-test"); Directory.CreateDirectory(logDirectory);
+            DiagnosticLog.Initialize(logDirectory); DiagnosticLog.Info("test.structured", new { Path = "кадр.png", Frame = 2 });
+            DiagnosticLog.Error("test.exception", new InvalidOperationException("outer", new IOException("inner")));
+            string logText = File.ReadAllText(DiagnosticLog.FilePath!);
+            Check(logText.Contains("test.structured") && logText.Contains("InvalidOperationException") && logText.Contains("IOException") && logText.Contains("outer"), "diagnostic log records structured context and nested exceptions");
+            File.WriteAllText(DiagnosticLog.FilePath!, new string('x', 4 * 1024 * 1024 + 1)); DiagnosticLog.Info("test.after-rotation");
+            Check(File.Exists(DiagnosticLog.FilePath + ".1") && File.ReadAllText(DiagnosticLog.FilePath!).Contains("test.after-rotation"), "diagnostic log rotates at 4 MiB");
+            string badDirectory = Path.Combine(output, "not-a-directory"); File.WriteAllText(badDirectory, "test"); DiagnosticLog.Initialize(badDirectory);
+            Check(DiagnosticLog.Failure is not null, "logging failure is reported without crashing");
+            DiagnosticLog.Initialize(logDirectory);
             var clock = Stopwatch.StartNew();
             if (args.Length > 1 && int.TryParse(args[1], out int sampleSize))
             {
